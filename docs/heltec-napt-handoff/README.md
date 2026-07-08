@@ -188,11 +188,20 @@ If any of these fail, the most likely cause in order of probability:
 
 ---
 
-## Source paths in our tree (for reference)
+## Source paths in this repo (for reference)
 
-If you want to see exactly what we shipped:
+Everything needed to reproduce the rebuild is committed here. The full
+`ESP_HaLow` clone and the IDF build tree are **not** in the repo (large upstream
+trees — the clone is gitignored), so only the *deltas* and the built archives are
+shipped:
 
-- Rebuilt archives: `ble-proxy/ESP_HaLow/libraries/wifi-halow/src/liblwip.a` and `libesp_netif.a`
-- Our rebuild project: `esp-idf-build/lwip-rebuild/` (sdkconfig.defaults + the standard IDF minimal-project layout)
-- Modified IDF headers: `esp-idf-build/esp-idf/components/lwip/port/include/lwipopts.h` and `esp-idf-build/esp-idf/components/lwip/lwip/src/include/lwip/lwip_napt.h`
-- Runtime NAPT-enable code (in our firmware): `ble-proxy/firmware/src/soft_ap.cpp`
+- Rebuilt archives (drop-in): `firmware/halow-overlay/wifi-halow/src/liblwip.a`
+  and `firmware/halow-overlay/wifi-halow/src/libesp_netif.a`
+- sdkconfig delta applied to the IDF rebuild:
+  `docs/heltec-napt-handoff/sdkconfig.napt-additions`
+- IDF header patches (against a clean IDF 5.1.2 tree's `components/lwip/...`):
+  `docs/heltec-napt-handoff/patches/lwipopts.h.snippet` and
+  `docs/heltec-napt-handoff/patches/lwip_napt.h.snippet`
+- Runtime NAPT-enable code (in our firmware): `firmware/src/soft_ap.cpp`
+  (+ `firmware/src/soft_ap.h`), distilled in
+  `docs/heltec-napt-handoff/runtime-napt-enable-snippet.cpp`

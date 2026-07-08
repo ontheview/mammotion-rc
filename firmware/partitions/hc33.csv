@@ -1,0 +1,21 @@
+# HC33 partition table — used by BOTH env:hc33 (HaLow) and
+# env:hc33-standard-wifi.  Based on the board-correct Heltec table
+# (ESP_HaLow/variants/HT-HC33/partitions.csv); the old default_8MB.csv the
+# standard-wifi env used was a wrong guess from before we found this one.
+#
+# Owned in-repo so re-cloning ESP_HaLow can't clobber it.  Only change vs the
+# stock Heltec table: user_data shrunk by 0x1000 (0x1E000 -> 0x1D000) to free
+# 0x7EF000..0x7F0000 for a 4 KB `config` partition.  key_data (MM6108 license)
+# and both app slots are untouched.  config_load.cpp finds this partition by
+# type=data subtype=0x99 label="config".
+# Name,    Type, SubType, Offset,   Size,     Flags
+nvs,       data, nvs,     0x9000,   0x5000,
+otadata,   data, ota,     0xe000,   0x2000,
+app0,      app,  ota_0,   0x10000,  0x380000,
+app1,      app,  ota_1,   0x390000, 0x380000,
+spiffs,    data, spiffs,  0x710000, 0x0A0000,
+fr,        data, spiffs,  0x7B0000, 0x20000,
+key_data,  0x40, 0x00,    0x7D0000, 0x002000,
+user_data, 0x41, 0x01,    0x7D2000, 0x01D000,
+config,    data, 0x99,    0x7EF000, 0x001000,
+coredump,  data, coredump,0x7F0000, 0x010000,

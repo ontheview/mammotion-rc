@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Luba Remote</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.23.0.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <label for="mower">Mower:</label>
+    <select id="mower"></select>
+    <button id="reconnect">Reconnect</button>
+    <a href="/onboarding" id="settings-link" title="Re-scan / edit mowers" style="color:#9cf;text-decoration:none;">⚙ Settings</a>
+    <span id="status">connecting…</span>
+  </header>
+
+  <main>
+    <section id="video-section">
+      <div id="video"></div>
+      <!-- Heading-up compass, overlaid on the video while the camera is live.
+           The arrow is fixed pointing up (= the camera's forward view); the ring
+           (with N/E/S/W) rotates so N shows where geographic north is. -->
+      <div id="compass" class="compass" hidden aria-hidden="true">
+        <div class="compass-ring" id="compass-ring">
+          <span class="cardinal cardinal-n">N</span>
+          <span class="cardinal cardinal-e">E</span>
+          <span class="cardinal cardinal-s">S</span>
+          <span class="cardinal cardinal-w">W</span>
+        </div>
+        <div class="compass-arrow"></div>
+        <div class="compass-readout" id="compass-readout">—</div>
+      </div>
+      <div class="camera-controls">
+        <button id="cam-start">Start Camera</button>
+        <button id="cam-stop" disabled>Stop Camera</button>
+        <span id="telemetry">
+          <span id="mower-status" title="Mower state"></span>
+          <span id="battery" title="Mower battery"></span>
+        </span>
+      </div>
+      <!-- Fault message on its own full-width line so it wraps instead of
+           truncating in the cramped controls row (unreadable on a phone). -->
+      <div id="mower-error" class="mower-error"></div>
+    </section>
+
+    <section id="controls">
+      <!-- Wrapper keeps the zone's parent non-flex: nipplejs's parentIsFlex
+           heuristic otherwise drops the box offset and places the stick far
+           from the finger (offset by the zone's distance from the page top). -->
+      <div id="joystick-wrap">
+        <div id="joystick-zone"></div>
+      </div>
+      <div class="actions">
+        <button id="pause">Pause</button>
+        <button id="resume">Resume</button>
+        <button id="dock">Go Home</button>
+        <button id="undock">Undock</button>
+        <button id="stop" class="danger">STOP</button>
+        <button id="light">Light On</button>
+      </div>
+    </section>
+  </main>
+
+  <pre id="log"></pre>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

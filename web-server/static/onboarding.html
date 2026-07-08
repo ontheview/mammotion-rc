@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Luba Remote — Setup</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    main { max-width: 760px; }
+    h1 { font-size: 1.3rem; margin: 0.2rem 0 1rem; }
+    h2 { font-size: 1.05rem; margin: 1.4rem 0 0.5rem; }
+    .step { background: #1c1c1c; border: 1px solid #333; border-radius: 6px; padding: 1rem; }
+    .muted { color: #888; font-size: 0.85rem; }
+    .field { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
+    .field label { font-size: 0.85rem; color: #bbb; }
+    input[type=text], input[type=email], input[type=password], input[type=number] {
+      background: #2a2a2a; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 0.5rem;
+      font-size: 0.95rem; width: 100%;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #2a2a2a; font-size: 0.85rem; vertical-align: middle; }
+    th { color: #999; font-weight: 600; }
+    td input { font-size: 0.8rem; padding: 0.3rem; }
+    .host-col { width: 130px; } .port-col { width: 72px; } .iot-col { width: 220px; }
+    .pill { display: inline-block; padding: 0.05rem 0.4rem; border-radius: 10px; font-size: 0.7rem; }
+    .pill.halow { background: #1f3a4d; color: #9cf; } .pill.wifi { background: #1f4d2f; color: #9f9; }
+    .err { color: #f77; font-size: 0.85rem; min-height: 1.1rem; margin-top: 0.4rem; }
+    .ok  { color: #7d7; }
+    .rowbar { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+    .rowbar .spacer { margin-left: auto; }
+    .note { background: #2a2410; border: 1px solid #4d4520; border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #db5; margin-top: 0.5rem; }
+    .hidden { display: none; }
+    button.primary { background: #1f4d2f; border-color: #2f6e44; }
+    button.primary:hover:not(:disabled) { background: #2f6e44; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Luba Remote — Setup</strong>
+    <span id="status" class="spacer"></span>
+    <a href="/" id="back-link" class="hidden" style="margin-left:auto;color:#9cf;">← Back</a>
+  </header>
+
+  <main>
+
+    <!-- Step 1: login -->
+    <section id="step-login" class="step hidden">
+      <h1>Sign in to Mammotion</h1>
+      <p class="muted">Your account email/password. Used to look up your mowers and (later)
+        the camera. Stored locally in <code>secrets.toml</code> — never sent anywhere but Mammotion.</p>
+      <div class="note">⚠️ Use a <strong>secondary</strong> Mammotion account, not your main one.
+        Signing in here can log your phone app out, and heavy use risks the account being
+        temporarily blocked. Create a separate account and share your mower with it from the app.</div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password">
+      </div>
+      <button id="login-btn" class="primary">Sign in &amp; scan</button>
+      <div id="login-err" class="err"></div>
+    </section>
+
+    <!-- Step 2: scan results -->
+    <section id="step-scan" class="step hidden">
+      <h1>Found mowers &amp; proxies</h1>
+      <p class="muted">Auto-matched by the proxy's bonded mower name. Adjust host/port if needed,
+        untick anything you don't want, then save.</p>
+
+      <h2>Matched</h2>
+      <table id="matched-table">
+        <thead><tr><th>Use</th><th>Mower</th><th>Nickname</th><th class="iot-col">iot_id</th>
+          <th class="host-col">Proxy host</th><th class="port-col">Port</th><th>Proxy</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="matched-empty" class="muted hidden">No proxies auto-matched a cloud mower.</p>
+
+      <h2>Cloud mowers without a proxy</h2>
+      <p class="muted">Discovered in your account but no HC33 reported them. Enter a host to include one manually.</p>
+      <table id="unmatched-mowers-table">
+        <thead><tr><th>Use</th><th>Mower</th><th>Nickname</th><th class="iot-col">iot_id</th>
+          <th class="host-col">Proxy host</th><th class="port-col">Port</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="um-empty" class="muted hidden">All your mowers were matched.</p>
+
+      <h2>Unmatched proxies</h2>
+      <table id="unmatched-proxies-table">
+        <thead><tr><th>chip_id</th><th>IP</th><th>Proxy</th><th>Bonded to</th><th>Note</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="up-empty" class="muted hidden">No leftover proxies on the network.</p>
+
+      <div class="rowbar">
+        <button id="rescan-btn">Re-scan</button>
+        <span class="spacer"></span>
+        <button id="save-btn" class="primary">Save &amp; connect</button>
+      </div>
+      <div id="scan-err" class="err"></div>
+    </section>
+
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    async function jget(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url}: HTTP ${r.status} ${await r.text()}`);
+      return r.json();
+    }
+    async function jpost(url, body) {
+      const r = await fetch(url, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || `${url}: HTTP ${r.status}`);
+      return data;
+    }
+
+    // ── boot ──────────────────────────────────────────────────────────────
+    async function boot() {
+      const st = await jget("/api/onboard/status");
+      if (st.onboarded) {
+        // Settings path — a roster already exists; the server auto-logs-in from
+        // secrets.toml / env, so skip the login step and go straight to scan.
+        $("back-link").classList.remove("hidden");
+        await runScan();
+      } else {
+        // First run — always ask for credentials explicitly, even if EMAIL /
+        // PASSWORD env vars are present.  Pre-fill the email if we have a hint.
+        if (st.suggested_email) $("email").value = st.suggested_email;
+        $("step-login").classList.remove("hidden");
+      }
+    }
+
+    // ── login ─────────────────────────────────────────────────────────────
+    $("login-btn").addEventListener("click", async () => {
+      $("login-err").textContent = "";
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      if (!email || !password) { $("login-err").textContent = "Enter email and password."; return; }
+      $("login-btn").disabled = true; setStatus("signing in…");
+      try {
+        const res = await jpost("/api/onboard/login", {email, password});
+        if (!res.ok) { $("login-err").textContent = res.error || "Login failed."; return; }
+        $("step-login").classList.add("hidden");
+        await runScan();
+      } catch (e) {
+        $("login-err").textContent = String(e);
+      } finally {
+        $("login-btn").disabled = false; setStatus("");
+      }
+    });
+
+    // ── scan ──────────────────────────────────────────────────────────────
+    function cell(text) { const td = document.createElement("td"); td.textContent = text ?? ""; return td; }
+    function inputCell(value, cls, type) {
+      const td = document.createElement("td");
+      const inp = document.createElement("input");
+      inp.type = type || "text"; inp.value = value ?? ""; if (cls) inp.className = cls;
+      td.appendChild(inp); return td;
+    }
+    function checkCell(checked) {
+      const td = document.createElement("td");
+      const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!checked;
+      td.appendChild(c); return td;
+    }
+    function proxyPill(variant) {
+      const s = document.createElement("span");
+      s.className = "pill " + (variant === "halow" ? "halow" : "wifi");
+      s.textContent = variant || "?"; return s;
+    }
+
+    async function runScan() {
+      $("step-scan").classList.remove("hidden");
+      setStatus("scanning…"); $("scan-err").textContent = "";
+      $("save-btn").disabled = true; $("rescan-btn").disabled = true;
+      try {
+        const data = await jget("/api/onboard/scan");
+        renderMatched(data.matched);
+        renderUnmatchedMowers(data.unmatched_mowers);
+        renderUnmatchedProxies(data.unmatched_proxies);
+        $("save-btn").disabled = false;
+      } catch (e) {
+        $("scan-err").textContent = String(e);
+      } finally {
+        setStatus(""); $("rescan-btn").disabled = false;
+      }
+    }
+    $("rescan-btn").addEventListener("click", runScan);
+
+    function renderMatched(rows) {
+      const tb = $("matched-table").querySelector("tbody"); tb.innerHTML = "";
+      $("matched-empty").classList.toggle("hidden", rows.length > 0);
+      for (const m of rows) {
+        const tr = document.createElement("tr");
+        tr.dataset.kind = "matched";
+        tr.dataset.name = m.name; tr.dataset.iot = m.iot_id || "";
+        tr.appendChild(checkCell(true));
+        tr.appendChild(cell(m.name));
+        tr.appendChild(inputCell(m.nickname || "", "nick"));
+        tr.appendChild(inputCell(m.iot_id || "", "iot"));
+        tr.appendChild(inputCell(m.hc33_host, "host"));
+        tr.appendChild(inputCell(m.hc33_port, "port", "number"));
+        const pc = document.createElement("td");
+        pc.appendChild(proxyPill(m.variant)); pc.append(" " + (m.chip_id || ""));
+        tr.appendChild(pc);
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderUnmatchedMowers(rows) {
+      const tb = $("unmatched-mowers-table").querySelector("tbody"); tb.innerHTML = "";
+      $("um-empty").classList.toggle("hidden", rows.length > 0);
+      for (const m of rows) {
+        const tr = document.createElement("tr");
+        tr.dataset.kind = "manual";
+        tr.dataset.name = m.name; tr.dataset.iot = m.iot_id || "";
+        tr.appendChild(checkCell(false));
+        tr.appendChild(cell(m.name));
+        tr.appendChild(inputCell(m.nickname || "", "nick"));
+        tr.appendChild(inputCell(m.iot_id || "", "iot"));
+        tr.appendChild(inputCell("", "host"));
+        tr.appendChild(inputCell(9876, "port", "number"));
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderUnmatchedProxies(rows) {
+      const tb = $("unmatched-proxies-table").querySelector("tbody"); tb.innerHTML = "";
+      $("up-empty").classList.toggle("hidden", rows.length > 0);
+      for (const p of rows) {
+        const tr = document.createElement("tr");
+        tr.appendChild(cell(p.chip_id));
+        tr.appendChild(cell(p.ip));
+        const pc = document.createElement("td"); pc.appendChild(proxyPill(p.variant)); tr.appendChild(pc);
+        tr.appendChild(cell(p.bonded_name));
+        let note;
+        if (!p.bonded_name || p.bonded_name === "none")
+          note = "Mower not found in BLE range — power it on near the HC33, then re-scan.";
+        else
+          note = "Bonded to a mower not in this account.";
+        tr.appendChild(cell(note));
+        tb.appendChild(tr);
+      }
+    }
+
+    // ── save ──────────────────────────────────────────────────────────────
+    function collectRows() {
+      const out = [];
+      document.querySelectorAll("#matched-table tbody tr, #unmatched-mowers-table tbody tr").forEach((tr) => {
+        const checked = tr.querySelector('input[type=checkbox]').checked;
+        if (!checked) return;
+        const host = tr.querySelector("input.host").value.trim();
+        if (!host) return;  // can't include without a host
+        out.push({
+          name:      tr.dataset.name,
+          nickname:  tr.querySelector("input.nick").value.trim() || null,
+          iot_id:    tr.querySelector("input.iot").value.trim() || null,
+          hc33_host: host,
+          hc33_port: parseInt(tr.querySelector("input.port").value, 10) || 9876,
+        });
+      });
+      return out;
+    }
+
+    $("save-btn").addEventListener("click", async () => {
+      $("scan-err").textContent = "";
+      const mowers = collectRows();
+      if (mowers.length === 0) {
+        $("scan-err").textContent = "Tick at least one mower with a proxy host before saving.";
+        return;
+      }
+      $("save-btn").disabled = true; setStatus("saving…");
+      try {
+        const res = await jpost("/api/onboard/save", {mowers});
+        if (res.ok) { setStatus("done"); window.location.href = "/"; }
+      } catch (e) {
+        $("scan-err").textContent = String(e); $("save-btn").disabled = false;
+      } finally {
+        setStatus("");
+      }
+    });
+
+    boot().catch((e) => { $("step-login").classList.remove("hidden"); $("login-err").textContent = String(e); });
+  </script>
+</body>
+</html>

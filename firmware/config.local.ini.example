@@ -1,0 +1,30 @@
+# Copy this file to config.local.ini and fill in your values, then:
+#
+#     pio run -e hc33 -t flashcfg
+#
+# config.local.ini is read by scripts/pack_config.py, packed into a binary blob
+# matching hc33_config_v1, and written to the `config` partition.  Firmware
+# config_load.cpp reads it at boot; missing/blank/corrupt -> config.h defaults.
+#
+# You normally DON'T need to do this in development — leave the partition blank
+# and the firmware uses config.h.  Use flashcfg only when testing the partition
+# path itself, or to override config.h without recompiling.
+
+[config]
+# Uplink network the HC33 joins.
+# env:hc33                  -> HaLow AP SSID/passphrase (HD01).
+# env:hc33-standard-wifi    -> home 2.4 GHz WiFi SSID/passphrase.
+uplink_ssid = my-ap
+uplink_pass = my-pass
+
+# HaLow regulatory region.  Ignored by the standard-wifi build.
+# Valid: AU US EU JP NZ KR (see mmwlan_regdb.h).
+region = AU
+
+# softAP the mower joins (HaLow build only; ignored by standard-wifi).
+# softap_channel: 2.4 GHz channel for the softAP.  Pick differently per HC33
+# when multiple deployments operate near each other to avoid co-channel
+# interference between mowers.  Valid 1-13 (1-14 in JP); default 6.
+softap_ssid    = MowerAP
+softap_pass    = mower-ap-password
+softap_channel = 6

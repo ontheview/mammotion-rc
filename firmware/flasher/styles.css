@@ -1,0 +1,147 @@
+/* Minimal, GH-Pages-friendly styling.  Plain CSS — no framework. */
+
+:root {
+    --fg: #1a1a1a;
+    --muted: #5a5a5a;
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --border: #d8d8d6;
+    --accent: #2d7a4d;
+    --accent-fg: #ffffff;
+    --error: #c0382a;
+    --hint: #6a6a6a;
+    --code-bg: #f0efeb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    padding: 2em 1em;
+}
+
+main {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+h1 { font-size: 1.6em; margin: 0 0 0.3em; }
+h2 { font-size: 1.1em; margin: 0 0 0.6em; }
+
+.lede {
+    color: var(--muted);
+    margin-bottom: 1.5em;
+}
+
+details {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6em 1em;
+    margin-bottom: 1.5em;
+}
+details summary { cursor: pointer; font-weight: 500; }
+details ul { margin: 0.6em 0 0; padding-left: 1.4em; }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1em 1.2em;
+    margin-bottom: 1em;
+}
+
+.row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    margin-bottom: 0.8em;
+}
+.row:last-child { margin-bottom: 0; }
+
+.label {
+    font-weight: 500;
+    font-size: 0.95em;
+}
+
+input, select {
+    font: inherit;
+    padding: 0.45em 0.6em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #fff;
+}
+input:focus, select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+}
+
+button {
+    font: inherit;
+    font-weight: 500;
+    padding: 0.55em 1.4em;
+    background: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+}
+button:not(:disabled):hover { filter: brightness(0.95); }
+
+.hint {
+    color: var(--hint);
+    font-size: 0.88em;
+    margin: 0.3em 0 0;
+}
+
+.error {
+    color: var(--error);
+    font-weight: 500;
+    margin: 0.6em 0 0;
+    min-height: 1.2em;
+}
+
+progress {
+    width: 100%;
+    height: 8px;
+    margin-bottom: 0.6em;
+}
+
+#status-line {
+    font-weight: 500;
+    margin: 0 0 0.6em;
+}
+
+#log {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 0.6em 0.8em;
+    font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    max-height: 240px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+footer {
+    color: var(--muted);
+    font-size: 0.85em;
+    margin-top: 2em;
+    text-align: center;
+}
+
+code {
+    background: var(--code-bg);
+    padding: 0.05em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}

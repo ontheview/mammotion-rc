@@ -1,0 +1,27 @@
+# Runtime dependencies for the Luba Remote web server (Python 3.13/3.14).
+#
+# pymammotion is now installed from PyPI (pinned) — NOT an editable local
+# checkout.  Our HC33 proxy transport ships with the web-server (hc33_proxy.py)
+# and is purely additive, so upstream PyMammotion runs UNPATCHED: 0.8.9 already
+# includes the immediate-first-BLE-heartbeat fix that previously required a
+# local ble_loop.py patch.  Bump this pin deliberately and re-test on a mower.
+pymammotion==0.8.9
+
+# pymammotion 0.8.9 imports `packaging` (pymammotion/device/mqtt_loop.py) but
+# does NOT declare it as a dependency, so it must be installed explicitly or
+# `import pymammotion.device.handle` fails with ModuleNotFoundError.
+packaging
+
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+
+# OPTIONAL — intentionally NOT installed by default.
+#
+# netifaces gives accurate per-interface broadcast addresses for proxy
+# discovery on multi-NIC / multi-subnet hosts.  It's a C extension with no
+# prebuilt wheel for Python 3.14 on Windows, so installing it would require
+# MSVC Build Tools to compile from source.  discover.py already falls back to a
+# derived /24 directed broadcast (works fine on a normal single-subnet home
+# network), so we skip it.  Only install it if discovery misses proxies on a
+# segmented network AND you have a compiler:
+#     pip install netifaces

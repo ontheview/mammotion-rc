@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HC33 BLE Proxy — Installer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main>
+        <h1>HC33 BLE Proxy installer</h1>
+
+        <p class="lede">
+            Flashes the BLE proxy firmware onto an HC33 (Heltec HT-HC33).
+            Plug the HC33 into your computer with a USB-C cable, fill out the
+            form, and click <b>Install</b>.
+        </p>
+
+        <details>
+            <summary>First time? Read this.</summary>
+            <ul>
+                <li>You need a <b>Chromium-based browser</b> — Chrome, Edge, Brave,
+                    Arc, Opera.  Firefox and Safari don't support Web Serial.</li>
+                <li>On Windows you also need the
+                    <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">SiLabs CP210x driver</a>.
+                    Mac and Linux usually have it built in.</li>
+                <li>Re-running this installer is the way to change config — just
+                    fill the form again and re-flash.  The MM6108 calibration
+                    data (<code>key_data</code> partition) is preserved.</li>
+            </ul>
+        </details>
+
+        <section class="card">
+            <h2>1. Pick a variant</h2>
+            <label class="row">
+                <span class="label">Firmware variant</span>
+                <select id="variant">
+                    <option value="hc33-halow">HaLow (long range via HD01)</option>
+                    <option value="hc33-wifi">Standard WiFi (no range extension)</option>
+                </select>
+            </label>
+            <p class="hint" id="variant-hint"></p>
+        </section>
+
+        <section class="card">
+            <h2>2. Configure</h2>
+
+            <label class="row">
+                <span class="label" id="uplink-ssid-label">HaLow SSID</span>
+                <input id="uplink_ssid" type="text" maxlength="32" autocomplete="off" required>
+            </label>
+
+            <label class="row">
+                <span class="label" id="uplink-pass-label">HaLow password</span>
+                <input id="uplink_pass" type="password" maxlength="63" autocomplete="off" required>
+            </label>
+
+            <div class="halow-only">
+                <label class="row">
+                    <span class="label">HaLow region</span>
+                    <select id="region">
+                        <option value="AU">AU — Australia</option>
+                        <option value="CA">CA — Canada</option>
+                        <option value="EU">EU — Europe</option>
+                        <option value="IN">IN — India</option>
+                        <option value="JP">JP — Japan</option>
+                        <option value="KR">KR — Korea</option>
+                        <option value="NZ">NZ — New Zealand</option>
+                        <option value="SG">SG — Singapore</option>
+                        <option value="US">US — United States</option>
+                    </select>
+                </label>
+
+                <label class="row">
+                    <span class="label">Mower-side SoftAP SSID</span>
+                    <input id="softap_ssid" type="text" maxlength="32" value="MowerAP" autocomplete="off" required>
+                </label>
+
+                <label class="row">
+                    <span class="label">SoftAP password (≥8 chars)</span>
+                    <input id="softap_pass" type="password" maxlength="63" minlength="8" autocomplete="off" required>
+                </label>
+
+                <label class="row">
+                    <span class="label">SoftAP channel (1–14)</span>
+                    <input id="softap_channel" type="number" min="1" max="14" value="6" required>
+                </label>
+
+                <p class="hint">
+                    Running multiple HC33s nearby?  Give each one a different
+                    SoftAP channel so the 2.4 GHz APs don't stomp on each other.
+                </p>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>3. Install</h2>
+            <button id="install" type="button" disabled>Install</button>
+            <p id="form-error" class="error" role="alert"></p>
+        </section>
+
+        <section class="card" id="status-card" hidden>
+            <h2>Status</h2>
+            <progress id="progress" value="0" max="100"></progress>
+            <p id="status-line"></p>
+            <pre id="log"></pre>
+        </section>
+
+        <footer>
+            <p>
+                The form values are baked into a 4 KB config partition at flash
+                time.  Nothing is sent over the network — everything happens
+                between this page and your USB cable.
+            </p>
+        </footer>
+    </main>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

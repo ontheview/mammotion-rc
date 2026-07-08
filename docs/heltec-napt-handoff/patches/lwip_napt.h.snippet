@@ -1,0 +1,27 @@
+/*
+ * Edit in
+ *   components/lwip/lwip/src/include/lwip/lwip_napt.h
+ *
+ * Locate the IP_NAPT_TIMEOUT_MS_* defines (around line 68-71 in IDF 5.1.x):
+ *
+ *   #define IP_NAPT_TIMEOUT_MS_TCP        (30*60*1000)
+ *   #define IP_NAPT_TIMEOUT_MS_TCP_DISCON (20*1000)
+ *   #define IP_NAPT_TIMEOUT_MS_UDP        (2*1000)     // <-- TOO SHORT
+ *   #define IP_NAPT_TIMEOUT_MS_ICMP       (30*1000)
+ *
+ * Change ONLY the UDP line:
+ */
+
+#define IP_NAPT_TIMEOUT_MS_UDP        (180*1000)        /* was (2*1000) */
+
+/*
+ * Rationale: 2 seconds is far too short for DNS round-trips on a noisy WiFi
+ * link.  Symptom of leaving it at 2 s: NAPT works for HTTP at first, then DNS
+ * queries from clients start failing intermittently, and Windows clients
+ * flood TCP-fallback DNS packets.  Looks like NAPT is broken but it's actually
+ * working — the lookup-translation entry just expires before the reply arrives.
+ *
+ * 180 s (3 minutes) matches common consumer-router NAT UDP timeouts and
+ * resolves the issue.  Some recent IDF trees already ship 180 s here; check
+ * before patching.
+ */

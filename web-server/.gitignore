@@ -1,0 +1,12 @@
+# Mammotion account credentials written by onboarding — never commit.
+secrets.toml
+
+# Atomic-write temp files.
+*.toml.tmp
+
+# The live roster is machine-specific (IPs/iot_ids); keep the example instead.
+mowers.toml
+
+# Created by install.py — machine-specific, never commit.
+.venv/
+*.pem                 # self-signed cert/key (cert.pem, key.pem)

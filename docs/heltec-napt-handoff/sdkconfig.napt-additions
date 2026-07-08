@@ -1,0 +1,16 @@
+# NAPT-specific sdkconfig items.  Append these to whatever sdkconfig.defaults
+# you're using to rebuild liblwip.a + libesp_netif.a.  All four are required.
+#
+# - LWIP_IP_FORWARD:        master switch for any kind of IP forwarding in lwIP
+# - LWIP_IPV4_NAPT:         enables source-NAT (NAPT) on IPv4
+# - LWIP_IPV4_NAPT_PORTMAP: enables static port mappings (we don't use them,
+#                           but esp_netif_napt_enable() refuses without this)
+# - LWIP_L2_TO_L3_COPY:     non-obvious — without this, packets received on
+#                           the WiFi AP iface never reach lwIP for forwarding.
+#                           See the comment in components/lwip/port/include/lwipopts.h.
+#                           This is the most commonly-missed knob.
+
+CONFIG_LWIP_IP_FORWARD=y
+CONFIG_LWIP_IPV4_NAPT=y
+CONFIG_LWIP_IPV4_NAPT_PORTMAP=y
+CONFIG_LWIP_L2_TO_L3_COPY=y

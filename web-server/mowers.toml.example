@@ -1,0 +1,30 @@
+# Mower roster for the Luba Remote web server.
+#
+# Copy this file to mowers.toml in the same directory and edit the entries
+# for your fleet.  app.py reads mowers.toml at startup; restart the server
+# after editing.
+#
+# Required fields per [[mower]]:
+#   name        — must match the Mammotion device name (e.g. "Luba-XXXXXXXX").
+#                 Used to look up the iot_id-bound Agora channel and shown in
+#                 the web UI's mower-selector dropdown.
+#   hc33_host   — IP or hostname of the HC33 running the TCP-proxy firmware.
+#
+# Optional fields per [[mower]]:
+#   hc33_port   — TCP port the HC33 listens on (default 9876).
+#   iot_id      — Aliyun IoT device ID, required only for the camera feature.
+#                 Find it via PyMammotion's dev_console.py after cloud login:
+#                     >>> [(d.device_name, d.iot_id) for d in devices]
+#                 Omit this field to disable the camera button for that mower.
+
+[[mower]]
+name      = "Luba-XXXXXXXX"
+hc33_host = "192.168.1.54"
+hc33_port = 9876
+iot_id    = "YOUR_IOT_ID"
+
+# Example second mower without camera support:
+#
+# [[mower]]
+# name      = "Luba-OTHER"
+# hc33_host = "192.168.1.55"

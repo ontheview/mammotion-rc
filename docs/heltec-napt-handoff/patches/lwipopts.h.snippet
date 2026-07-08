@@ -1,0 +1,23 @@
+/*
+ * Add these defines near the top of
+ *   components/lwip/port/include/lwipopts.h
+ * (anywhere before the LWIP_TCPIP_CORE_LOCKING block is fine).
+ *
+ * These are not Kconfig-driven because IDF 5.1's Kconfig doesn't expose
+ * LWIP_NETIF_LINK_CALLBACK or the pbuf pool sizing knobs directly.
+ */
+
+/* Heltec's HaLow framework (libmmipal.a) links against netif_set_link_callback
+ * which is gated on LWIP_NETIF_LINK_CALLBACK.  IDF 5.1 doesn't expose this via
+ * Kconfig, so hard-enable it here to match the layout libmmipal expects.
+ * Without this, libmmipal.a fails to link with undefined references to
+ * netif_set_link_callback / netif_set_link_up / netif_set_link_down. */
+#define LWIP_NETIF_LINK_CALLBACK        1
+
+/* pbuf pool sized for NAT-forwarded TCP bursts and softAP beacon headroom.
+ * Default 16 starves the softAP under any sustained traffic — beacons get
+ * delayed when the pool exhausts, clients disassociate.  64 keeps enough
+ * headroom for our HC33 use case (one or two softAP clients, ~1 Mbps
+ * bidirectional through NAPT).  Adjust based on your application's needs. */
+#define PBUF_POOL_SIZE                  64
+#define MEMP_NUM_PBUF                   64

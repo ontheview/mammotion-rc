@@ -99,7 +99,7 @@ You'll also need a PC, or any other Python-capable device, on the same network.
         user to the `dialout` group: `sudo usermod -aG dialout $USER` (re-login).
       - **macOS:** `ls /dev/tty.usbserial-*` (or `/dev/tty.SLAB_USBtoUART`).
    4. Open the flasher in a **Chromium-based browser** (Chrome / Edge / Brave):
-      **https://ontheview.github.io/mammotion-rc/** — pick the variant
+      **https://ontheview.github.io/mammotion-rc/firmware/flasher/** — pick the variant
       (**standard Wi-Fi** or **HaLow**), enter your Wi-Fi network details, and
       click Install.
    5. When done, plug the HC33 into the mower's USB-C port and **power the mower

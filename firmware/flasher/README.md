@@ -32,13 +32,25 @@ python3 -m http.server 8000
 
 Two common patterns:
 
-### A) Publish a subfolder from main (simplest)
+### A) Serve the whole repo from main, reach the flasher at its subpath (simplest)
 
-In the repo's GitHub Pages settings, set source to **main branch /
-firmware/flasher folder** (GitHub Pages supports `/docs` or root only by
-default — for a non-standard subfolder, use pattern B below).
+In the repo's GitHub Pages settings, set source to **main branch / `/root`**.
+GitHub Pages then serves the entire repo, and the flasher is just a sub-URL:
 
-### B) Push `flasher/` to a `gh-pages` branch
+```
+https://ontheview.github.io/mammotion-rc/firmware/flasher/
+```
+
+This is what the top-level README links to. A `.nojekyll` file at the repo root
+(already committed) tells Pages to serve the flasher's `.js` / `.bin` / `vendor/`
+assets verbatim instead of running the site through Jekyll. Nothing to move or
+copy — it publishes on every push to `main`, and the repo root stays free for a
+future landing page.
+
+### B) Push only `flasher/` to a `gh-pages` branch (flasher at the root URL)
+
+If you'd rather the flasher live at the bare `…/mammotion-rc/` root URL and not
+expose the rest of the repo on Pages:
 
 ```bash
 cd firmware/flasher

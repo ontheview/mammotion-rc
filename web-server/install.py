@@ -4,8 +4,12 @@
 The only prerequisite is a Python 3.13 or 3.14 interpreter already installed
 (PyMammotion 0.8.x requires ``>=3.13,<3.15``).  Run this file with that Python:
 
-    python install.py            # Windows (or: py -3.14 install.py)
+    python install.py            # Windows — run from an *Administrator* prompt
     python3 install.py           # Linux / macOS
+
+On Windows the installer must be run elevated (Administrator): it adds a Windows
+Firewall rule so proxy auto-discovery (broadcast UDP) and LAN access to the web
+UI get through.  It exits early with instructions if not elevated.
 
 It is idempotent — safe to re-run to repair or upgrade an install.  Each step
 below can be pinned via a CLI flag (see ``--help``); anything not supplied is
@@ -22,6 +26,8 @@ What it does:
      the web onboarding page.
   5. Emit run-server.bat + run-server.sh with the venv/cert paths baked in, so
      there is no line to hand-edit.
+  6. (Windows only) Add a Windows Firewall inbound-allow rule for the venv
+     Python so the UDP proxy-discovery replies and LAN access to the UI pass.
 """
 
 from __future__ import annotations
@@ -67,6 +73,33 @@ def toml_quote(s: str) -> str:
 
 def interactive(args: argparse.Namespace) -> bool:
     return not args.non_interactive and sys.stdin.isatty()
+
+
+def _is_admin() -> bool:
+    """True if this process is elevated (Administrator). Windows only."""
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def require_admin() -> None:
+    """On Windows, refuse to run unless elevated. We add a Windows Firewall rule
+    (step 6) so proxy-discovery UDP replies and LAN access to the web UI get
+    through Defender Firewall, and that needs Administrator rights. No-op on
+    Linux/macOS (never require root there)."""
+    if not IS_WINDOWS or _is_admin():
+        return
+    die(
+        "This installer must be run as Administrator on Windows.\n"
+        "  It adds a Windows Firewall rule so proxy auto-discovery (UDP) and LAN\n"
+        "  access to the web UI work. Re-run from an elevated prompt:\n"
+        "    1. Start menu -> type 'cmd' -> right-click 'Command Prompt'\n"
+        "       -> 'Run as administrator'\n"
+        f"    2. cd {APP_DIR}\n"
+        "    3. python install.py"
+    )
 
 
 # ── 1. interpreter + venv ─────────────────────────────────────────────────────
@@ -294,6 +327,47 @@ def write_launchers(vpy: Path, cert: Path, key: Path, host: str, port: int) -> l
     return written
 
 
+# ── 6. Windows Firewall ───────────────────────────────────────────────────────
+FIREWALL_RULE_NAME = "Mammotion Remote web-server"
+
+
+def setup_firewall(vpy: Path) -> None:
+    """Add a Windows Firewall inbound-allow rule for the venv Python.
+
+    Proxy discovery broadcasts a UDP probe and the HC33s reply *unicast* from
+    their own IPs to an ephemeral source port; Defender Firewall's stateful UDP
+    pinhole is keyed on the broadcast destination, so those replies look
+    unsolicited and are dropped without an inbound rule. The rule is scoped by
+    PROGRAM (not port) so it covers both the ephemeral UDP replies and inbound
+    LAN connections to the web UI on 8443. Requires Administrator — guaranteed
+    by require_admin() at startup. Idempotent: it replaces any prior rule of the
+    same name. No-op off Windows."""
+    if not IS_WINDOWS:
+        return
+    # Drop a stale rule first so re-runs don't stack duplicates (rc!=0 when none
+    # match — ignore it).
+    subprocess.run(
+        ["netsh", "advfirewall", "firewall", "delete", "rule", f"name={FIREWALL_RULE_NAME}"],
+        capture_output=True,
+    )
+    add = [
+        "netsh", "advfirewall", "firewall", "add", "rule",
+        f"name={FIREWALL_RULE_NAME}",
+        "dir=in", "action=allow",
+        f"program={vpy}",
+        "enable=yes", "profile=private,domain",
+    ]
+    info("$ " + " ".join(add))
+    res = subprocess.run(add, capture_output=True, text=True)
+    if res.returncode != 0:
+        die(
+            "Failed to add the Windows Firewall rule (elevation lost?):\n  "
+            + (res.stderr or res.stdout or "").strip()
+        )
+    info(f"Inbound-allow rule '{FIREWALL_RULE_NAME}' added for {vpy.name} "
+         "(profiles: private, domain).")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -313,6 +387,8 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8443, help="Bind port (default 8443)")
     ap.add_argument("--non-interactive", action="store_true", help="Never prompt; use flags/defaults/existing values")
     args = ap.parse_args()
+
+    require_admin()  # Windows: must be elevated to add the firewall rule (step 6)
 
     venv_dir = args.venv.resolve()
 
@@ -334,6 +410,10 @@ def main() -> None:
 
     step("Writing launchers")
     launchers = write_launchers(vpy, cert, key, args.host, args.port)
+
+    if IS_WINDOWS:
+        step("Adding Windows Firewall rule (inbound allow: proxy discovery + LAN UI)")
+        setup_firewall(vpy)
 
     run_cmd = "run-server.bat" if IS_WINDOWS else "./run-server.sh"
     print("\n" + "=" * 60)

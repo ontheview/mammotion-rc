@@ -19,9 +19,20 @@ One command sets everything up. The only prerequisite is Python 3.13 or 3.14
 already installed (PyMammotion 0.8.x requires `>=3.13,<3.15`):
 
 ```
-python install.py          # Windows  (or: py -3.14 install.py)
+python install.py          # Windows — run from an Administrator prompt
 python3 install.py         # Linux / macOS
 ```
+
+**On Windows, run it elevated (Administrator).** It adds a Windows Firewall
+inbound-allow rule for the venv Python so proxy auto-discovery (broadcast UDP,
+whose unicast replies land on an ephemeral port) and LAN access to the web UI
+aren't silently blocked. The installer exits early with instructions if it isn't
+elevated. Linux/macOS need no elevation (no rule is added).
+
+The rule covers the **Private** and **Domain** profiles only — **not Public**.
+If Windows classifies your LAN as *Public*, discovery and LAN access stay
+blocked even with the rule; switch the network to **Private** (Settings →
+Network & internet → your network → *Private network*).
 
 It creates a virtualenv (`./.venv`), `pip install`s PyMammotion 0.8.9 +
 FastAPI/uvicorn (our HC33 transport ships in this repo — `hc33_proxy.py` — so

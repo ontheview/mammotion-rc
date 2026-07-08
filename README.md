@@ -66,13 +66,24 @@ You'll also need a PC, or any other Python-capable device, on the same network.
 3. **Run the installer:**
    ```
    cd web-server
-   python install.py        # Windows  (or: py -3.14 install.py)
+   python install.py        # Windows — run from an Administrator prompt
    python3 install.py       # Linux / macOS
    ```
    It creates a virtualenv, installs PyMammotion + the web server, generates a
    self-signed TLS certificate, and prompts you for a **web-UI login password**
    (and, optionally, your Mammotion account). It writes `run-server.bat` /
    `run-server.sh` with every path baked in. Safe to re-run any time.
+
+   > 🪟 **On Windows, run it as Administrator** (Start → type `cmd` → right-click
+   > **Command Prompt** → **Run as administrator**). The installer adds a Windows
+   > Firewall rule so the mower-proxy auto-discovery (UDP) and LAN access to the
+   > web UI work; without it those are silently blocked. It exits with
+   > instructions if it isn't elevated. (Linux/macOS need no elevation.)
+   >
+   > The rule applies to the **Private** and **Domain** network profiles only —
+   > **not Public**. If Windows has your network set to *Public*, discovery and
+   > LAN access will still be blocked; set the network to **Private** (Settings →
+   > Network & internet → your network → *Private network*).
 
 4. **Flash the firmware** onto the HC33 — easiest with the browser flasher, no
    toolchain required. In order:

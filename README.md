@@ -6,7 +6,7 @@ across your whole property — using a Heltec HC33 (ESP32-S3 + Wi-Fi HaLow) as a
 Bluetooth-over-network proxy, and PyMammotion driving it from a web page.
 
 > 📷 For photos of the hardware setup and screenshots of the web UI, see
-> https://ontheview.com.au/&lt;placeholder&gt;
+> https://ontheview.com.au/blog/mammotion-remote-controller/
 
 ## Layout
 

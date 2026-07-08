@@ -136,8 +136,17 @@ esp_netif_set_dns_info(ap_netif, ESP_NETIF_DNS_MAIN, &dns_info);
 
 ## Build recipe (rebuilding liblwip.a and libesp_netif.a)
 
-1. Get a clean ESP-IDF 5.1.2 tree (matches the IDF your `framework-libs` was
-   built against — important for ABI compatibility).
+1. **Install ESP-IDF 5.1.2** — it must match the IDF your `framework-libs` were
+   built against (5.1.2) for ABI compatibility; a mismatched IDF links but can
+   crash or corrupt memory at runtime. Clone the pinned tag *with submodules*,
+   install its esp32s3 toolchain, then activate it in your shell:
+   ```bash
+   git clone -b v5.1.2 --recursive https://github.com/espressif/esp-idf.git esp-idf-5.1.2
+   cd esp-idf-5.1.2
+   ./install.sh esp32s3      # Windows: install.bat esp32s3
+   . ./export.sh             # Windows: export.bat  — puts idf.py on PATH for this shell
+   ```
+   (If you already have IDF 5.1.2 installed, just `export.sh`/`export.bat` it.)
 2. Create a minimal IDF project that depends on the `lwip` component and an
    empty `app_main()`.
 3. Copy `sdkconfig.napt-additions` into your project's `sdkconfig.defaults`.

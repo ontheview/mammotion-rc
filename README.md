@@ -127,9 +127,10 @@ You'll also need a PC, or any other Python-capable device, on the same network.
 
 Once connected, the browser page gives you:
 
-- **Drive** — an on-screen joystick for live manual driving, with a server-side
-  dead-man stop: the mower halts the instant you release the joystick or the
-  connection drops.
+- **Drive** — an on-screen joystick for live manual driving, including diagonals
+  (drive and turn at once). The mower moves while you hold the stick and stops
+  the moment you release it — or if the browser loses focus or the connection
+  drops.
 - **Job control** — **Pause**, **Resume**, **Go Home** (return to the dock) and
   **Undock**, plus a big **STOP**.
 - **Camera** — **Start / Stop** the live video feed from the mower.

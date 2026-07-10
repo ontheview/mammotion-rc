@@ -47,6 +47,7 @@ from pymammotion.device.handle import DeviceHandle
 from pymammotion.http.http import MammotionHTTP
 from pymammotion.transport.base import TransportAvailability
 from pymammotion.utility.device_type import DeviceType
+from pymammotion.utility.movement import get_percent, transform_both_speeds
 
 # Local module (ships with the web-server, not with PyMammotion): our TCP-over-
 # HC33 transport that subclasses pymammotion's Transport.  Keeping it here lets
@@ -1186,19 +1187,26 @@ async def joystick_ws(ws: WebSocket, name: str):
                 continue
 
             stopped = False
+            # Combined linear + angular in ONE command so forward and turning
+            # happen simultaneously (arc / diagonal), like the official app —
+            # DrvMotionCtrl carries both speeds.  Previously we picked a single
+            # axis (abs(y) >= abs(x)) and the move_* helpers zeroed the other,
+            # so you could only go straight OR turn.  Feeding both axes through
+            # the mower's own transform keeps the scaling identical to the old
+            # single-axis helpers (linear + = fwd, angular + = right).
+            lp = get_percent(min(abs(y), MAX_LINEAR) * 100)
+            ap = get_percent(min(abs(x), MAX_ANGULAR) * 100)
+            linear_speed, angular_speed = transform_both_speeds(
+                90.0 if y >= 0 else 270.0,   # forward / back
+                0.0 if x >= 0 else 180.0,    # right / left
+                lp, ap,
+            )
             async with lock:
-                if abs(y) >= abs(x):
-                    speed = min(abs(y), MAX_LINEAR)
-                    if y > 0:
-                        await h.send_raw(h.commands.move_forward(linear=speed))
-                    else:
-                        await h.send_raw(h.commands.move_back(linear=speed))
-                else:
-                    speed = min(abs(x), MAX_ANGULAR)
-                    if x > 0:
-                        await h.send_raw(h.commands.move_right(angular=speed))
-                    else:
-                        await h.send_raw(h.commands.move_left(angular=speed))
+                await h.send_raw(
+                    h.commands.send_movement(
+                        linear_speed=linear_speed, angular_speed=angular_speed
+                    )
+                )
 
     except WebSocketDisconnect:
         _LOGGER.info("joystick ws disconnected for %s", name)

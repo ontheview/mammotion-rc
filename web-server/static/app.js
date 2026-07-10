@@ -83,6 +83,8 @@ let joystick = null;
 let agora = null;          // AgoraRTC client when camera is up
 let statusTimer = null;    // setInterval handle for status polling
 let headingTimer = null;   // setInterval handle for the compass heading poll
+let joyTimer = null;       // setInterval re-sending the held joystick state (keeps the mower moving)
+let joyState = { x: 0, y: 0, force: 0 };  // latest stick command, re-sent by joyTimer while held
 
 // Fixed correction applied to the mower's reported heading before it drives the
 // compass. Leave 0 unless the compass reads offset from reality (e.g. if the
@@ -270,6 +272,7 @@ els.reconnect.onclick = () => {
 function startJoystick(name) {
   if (ws) { ws.close(); ws = null; }
   if (joystick) { joystick.destroy(); joystick = null; }
+  if (joyTimer) { clearInterval(joyTimer); joyTimer = null; }   // don't leak a re-send timer across mower switches
 
   const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${wsProto}//${location.host}/ws/joystick/${encodeURIComponent(name)}`);
@@ -292,25 +295,35 @@ function startJoystick(name) {
     size: 180,
   });
 
-  let lastSend = 0;
-  const THROTTLE_MS = 150;   // ~6.5 Hz
+  // The mower self-limits each speed command — it moves a short distance/time
+  // then stops — so one frame per stick movement isn't enough to keep it going.
+  // nipplejs only emits "move" when the stick actually MOVES (verified: no
+  // repeat-while-held option in 0.10.1), so a motionless held stick used to fall
+  // silent and the mower would halt ("hold it up and it stops").  Fix: latch the
+  // current stick state and RE-SEND it on an interval while held.  REPEAT_MS must
+  // be shorter than the mower's per-command window; 150 ms (~6.5 Hz) is the rate
+  // that already sustained motion during active drags.
+  const REPEAT_MS = 150;   // ~6.5 Hz
 
   joystick.on("move", (_evt, data) => {
-    const now = Date.now();
-    if (now - lastSend < THROTTLE_MS) return;
-    lastSend = now;
     // nipplejs's data.vector has y positive UP (it negates internally).
     // angle.radian uses screen-clockwise-from-right, so sin(angle) for "up"
     // gives -1 — wrong sign for our server.  Stick with vector.
-    sendJoystick({
+    joyState = {
       x: data.vector.x,
       y: data.vector.y,
       force: Math.min(data.force, 1),
-    });
+    };
+    if (!joyTimer) {
+      sendJoystick(joyState);                                           // first frame immediately
+      joyTimer = setInterval(() => sendJoystick(joyState), REPEAT_MS);  // then heartbeat the held state
+    }
   });
 
   joystick.on("end", () => {
-    sendJoystick({ x: 0, y: 0, force: 0 });
+    if (joyTimer) { clearInterval(joyTimer); joyTimer = null; }
+    joyState = { x: 0, y: 0, force: 0 };
+    sendJoystick(joyState);                                             // explicit stop on release
   });
 }
 
@@ -319,6 +332,24 @@ function sendJoystick(payload) {
     ws.send(JSON.stringify(payload));
   }
 }
+
+// Safety: if the tab loses focus or is hidden while the stick is held (alt-tab,
+// the pointer leaves the window so "end" never fires, or the phone screen locks
+// / the browser is backgrounded), kill the re-send heartbeat and command a stop.
+// Without this the mower could keep driving on the last speed while you're not
+// looking.  Registered once at load; joyTimer/joyState are module-scope.
+function joystickFailsafeStop() {
+  if (!joyTimer) return;                 // only act if we're actively driving
+  clearInterval(joyTimer);
+  joyTimer = null;
+  joyState = { x: 0, y: 0, force: 0 };
+  sendJoystick(joyState);
+}
+window.addEventListener("blur", joystickFailsafeStop);
+window.addEventListener("pagehide", joystickFailsafeStop);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) joystickFailsafeStop();
+});
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 async function action(name) {

@@ -8,8 +8,8 @@ to drive the mower with an on-screen joystick and watch the camera feed.
 
 - `app.py` — single-file FastAPI app: lifespan builds the `DeviceHandle`s and
   connects each `HC33ProxyTransport`; REST + WebSocket endpoints route
-  commands; server-side joystick dead-man (500 ms) stops the mower if the
-  browser stalls.
+  commands. The joystick WebSocket streams speed commands to the mower and
+  sends an explicit stop when you release the stick.
 - `static/` — single-page browser UI (HTML + JS + CSS), AgoraRTC + nipplejs
   loaded from CDN.
 
@@ -256,10 +256,22 @@ For development with auto-reload you can bypass the launcher:
 
 ## Safety
 
-Two watchdogs cooperate:
+While the stick is held, the browser re-sends the current speed on a ~150 ms
+heartbeat so the mower keeps moving; it's stopped by several layers, from normal
+to last-resort:
 
-1. **Server-side joystick dead-man** (`app.py::deadman()`): if the WebSocket
-   stops receiving frames for 500 ms, emit `stop_and_not_save_task`.
-2. **Firmware-side TCP idle watchdog** (`firmware/src/tcp_proxy.cpp`): if
-   no TCP frame arrives at the HC33 for 30 s, the firmware closes the socket
-   which drops the BLE link — final safety stop for silent network failures.
+1. **Explicit stop on release** — releasing the joystick sends a stop, and the
+   server also sends one from its WebSocket-disconnect handler (`app.py`).
+2. **Browser focus-loss failsafe** (`static/app.js`) — if the tab loses
+   focus/visibility or the phone locks while the stick is held, the UI stops the
+   heartbeat and commands a stop, so a "held then walked away" stick can't keep
+   driving.
+3. **Mower-side self-limit** — each drive command only moves the mower a short,
+   capped amount, so if commands stop arriving the mower stops on its own. This
+   runs on the mower itself, so it works even when the network is dead — it's the
+   primary backstop, and the reason there is deliberately **no server-side
+   dead-man timer**.
+4. **Firmware TCP idle watchdog** (`firmware/src/tcp_proxy.cpp`,
+   `CLIENT_IDLE_TIMEOUT_MS = 30 s`) — if no TCP frame reaches the HC33 for 30 s,
+   the firmware closes the socket and drops the BLE link: final catch for silent
+   network failures.

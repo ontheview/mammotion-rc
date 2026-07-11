@@ -26,7 +26,26 @@ Two ways to set it up:
   normal-sized yards.
 - **Long range (~$180 AUD):** add the HD01 HaLow access point (and the HaLow
   antenna) to push coverage out to 1–2 km across a large property. Same web
-  control and camera — HaLow just adds reach.
+  control and camera — HaLow just adds reach. (How the camera behaves over
+  HaLow depends on the mower's Wi-Fi — see the note below.)
+
+> 📡 **Control and camera are two independent streams.** *Control* runs through
+> the HC33 proxy and reaches the mower over **Bluetooth**, so it works over
+> HaLow with nothing extra. The *camera* is separate: the mower streams video to
+> the Mammotion cloud over its own **2.4 GHz Wi-Fi**, and your browser plays it
+> back from the cloud — it never touches the proxy or Bluetooth.
+>
+> So over HaLow, whether the camera works depends on **which Wi-Fi the mower is
+> on**:
+> - **Mower on your home Wi-Fi** (typical): the camera works only while the
+>   mower is within home-Wi-Fi range. Past that, control still works over HaLow
+>   but the camera drops — and no HaLow bandwidth is spent on video.
+> - **Mower on the HC33's `MowerAP` Wi-Fi**: the camera works across the whole
+>   HaLow range, routed out over the HaLow backhaul — but it then shares the
+>   HaLow link with your control traffic and uses its bandwidth. On
+>   lower-bandwidth HaLow links (e.g. the narrower EU spectrum) the video may
+>   drop to a lower resolution/frame-rate; if you'd rather not spend HaLow
+>   bandwidth on video at all, keep the mower on home Wi-Fi.
 
 | Part | What it's for | Approx. |
 |---|---|---|

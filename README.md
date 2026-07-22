@@ -47,6 +47,11 @@ Two ways to set it up:
 >   drop to a lower resolution/frame-rate; if you'd rather not spend HaLow
 >   bandwidth on video at all, keep the mower on home Wi-Fi.
 
+> 🔌 **The HD01 needs re-configuring.** It ships pre-set to NAT, so re-run its
+> setup wizard, connect it by **Ethernet**, and set it to **Access Point mode
+> with Bridge** — otherwise the web server can't auto-discover or reach the HC33. See the
+> [web-server onboarding notes](web-server/README.md#first-run--automatic-onboarding).
+
 | Part | What it's for | Approx. |
 |---|---|---|
 | [Heltec HC33](https://www.aliexpress.com/item/1005009242817119.html) | The on-mower brain — HaLow radio + Bluetooth + Wi-Fi | $45 AUD |

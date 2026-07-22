@@ -155,6 +155,17 @@ to re-scan or edit.
 
 > Discovery needs the firmware built with `discovery.cpp` (UDP responder on
 > port 9878).  It works on both the HaLow and standard-wifi variants.
+>
+> On the HaLow variant, discovery also needs the **HD01 in bridge mode** — it's
+> a UDP broadcast, and broadcasts don't cross a router/NAT boundary, so the
+> probe only reaches the HC33 when the HaLow segment shares your LAN's subnet.
+> The HD01 defaults to **NAT mode**, and it can only bridge over **Ethernet**
+> (a Wi-Fi uplink is NAT-only). So for discovery to work, connect the HD01 to
+> your LAN by **Ethernet** and re-run its **setup wizard**, choosing **Access
+> Point** mode with **Bridge** (not NAT).
+> If you must run the HD01 on a Wi-Fi uplink (NAT-only), skip discovery and add
+> the mower **manually by host** below — point it at the HD01's LAN IP with a
+> TCP port-forward to the HC33's `9876`.
 
 ### Schema (written by onboarding; hand-editable)
 

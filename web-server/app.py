@@ -981,9 +981,13 @@ async def _cloud_mowers() -> list[dict]:
     so RTK filtering uses both.
     """
     http = await _ensure_http()
-    # (device_name, iot_id, product_key, nickname).  nickname is the friendly
-    # name set in the Mammotion app; None when unset or via the fallback path.
-    devices: list[tuple[str, str, str, str | None]] = []
+    # Collected from up to four sources; merged by device_name afterwards so a
+    # name seen in a richer source (with iot_id) beats a bare mention.
+    #   * list_binding_by_account()  — Aliyun, authoritative, carries iot_id
+    #   * get_shared_notice_list()   — shared-received mowers (no iot_id)
+    #   * get_user_device_page()     — owned + shared-received WITH iot_id
+    #   * get_user_device_list()     — owned device-server list
+    entries: list[tuple[str, str, str, str | None]] = []
     gateway_error: str | None = None
 
     try:
@@ -1019,32 +1023,70 @@ async def _cloud_mowers() -> list[dict]:
         resp = cloud.devices_by_account_response
         if resp and resp.data and resp.data.data:
             for d in resp.data.data:
-                devices.append((d.device_name, d.iot_id, d.product_key or "", d.nick_name or None))
+                entries.append((d.device_name, d.iot_id, d.product_key or "", d.nick_name or None))
+
+        # Shared-mower source: listBindingByAccount only returns devices owned
+        # by the account.  An account that merely *received* a share (the
+        # recommended secondary-account setup) has its mower only on
+        # getShareNoticeList (status=0 = accepted).  Merge those in so the
+        # onboarding matcher can pair bonded_name == device_name.  ShareNotice
+        # carries device_name/product_name but no iot_id.
+        shared = await cloud.get_shared_notice_list()
+        if shared and shared.data and shared.data.data:
+            for n in shared.data.data:
+                if n.status == 0 and n.device_name:
+                    entries.append((n.device_name, None, "", None))
     except Exception as exc:  # noqa: BLE001
         gateway_error = str(exc)
         _LOGGER.warning("Aliyun device enumeration failed: %s", exc)
 
-    if not devices:
-        # Fallback: owned device-server list (name + iot_id, no product_key).
-        try:
-            resp = await http.get_user_device_list()
-            for d in (resp.data or []):
-                devices.append((d.device_name, d.iot_id, "", None))
-        except Exception as exc:  # noqa: BLE001
-            _LOGGER.warning("device-server enumeration failed: %s", exc)
+    # Fallbacks: the device-page endpoint (v1/user/device/page) returns BOTH
+    # owned (owned=1) and shared-received (owned=0) devices WITH iot_id —
+    # unlike get_user_device_list, which returns nothing for a shared-only
+    # account.  Together they fill iot_id (needed for the camera) on a
+    # secondary (receiver) account.
+    try:
+        resp = await http.get_user_device_page()
+        for d in (resp.data.records if resp.data else []):
+            entries.append((d.device_name, d.iot_id, d.product_key or "", None))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.warning("device-page enumeration failed: %s", exc)
 
-    if not devices and gateway_error:
+    try:
+        resp = await http.get_user_device_list()
+        for d in (resp.data or []):
+            entries.append((d.device_name, d.iot_id, "", None))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.warning("device-server enumeration failed: %s", exc)
+
+    if not entries and gateway_error:
         raise HTTPException(502, f"Could not list account devices: {gateway_error}")
 
-    out: list[dict] = []
-    seen: set[str] = set()
-    for name, iot_id, pk, nickname in devices:
-        if not name or name in seen:
+    # Merge by device_name — prefer the entry carrying a real iot_id + nickname.
+    merged: dict[str, dict] = {}
+    for name, iot_id, pk, nickname in entries:
+        if not name:
             continue
-        if DeviceType.is_rtk(name, pk):
+        cur = merged.get(name)
+        if cur is None:
+            merged[name] = {"iot_id": iot_id or None, "product_key": pk, "nickname": nickname}
+            continue
+        if iot_id and not cur["iot_id"]:
+            cur["iot_id"] = iot_id
+        if pk and not cur["product_key"]:
+            cur["product_key"] = pk
+        if nickname and not cur["nickname"]:
+            cur["nickname"] = nickname
+
+    out: list[dict] = []
+    for name, data in merged.items():
+        if DeviceType.is_rtk(name, data.get("product_key") or ""):
             continue  # skip RTK base stations
-        seen.add(name)
-        out.append({"name": name, "iot_id": iot_id or None, "nickname": nickname})
+        out.append({
+            "name": name,
+            "iot_id": data.get("iot_id"),
+            "nickname": data.get("nickname"),
+        })
     return out
 
 

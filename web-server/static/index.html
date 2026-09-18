@@ -20,23 +20,41 @@
 
   <main>
     <section id="video-section">
-      <div id="video"></div>
-      <!-- Heading-up compass, overlaid on the video while the camera is live.
-           The arrow is fixed pointing up (= the camera's forward view); the ring
-           (with N/E/S/W) rotates so N shows where geographic north is. -->
-      <div id="compass" class="compass" hidden aria-hidden="true">
-        <div class="compass-ring" id="compass-ring">
-          <span class="cardinal cardinal-n">N</span>
-          <span class="cardinal cardinal-e">E</span>
-          <span class="cardinal cardinal-s">S</span>
-          <span class="cardinal cardinal-w">W</span>
+      <!-- Both feeds live in one stage and are positioned by CSS class:
+           .is-main fills it, .is-pip sits small in the bottom-right corner.
+           Swapping only toggles those classes, so neither stream is torn down
+           or re-fetched — the change is instant and costs nothing.
+             #video      → Luba gimbal camera, Agora/WebRTC renders into it
+             #video-hc33 → HC33 OV3660, an <img> fed by the MJPEG proxy -->
+      <div id="video-stage">
+        <div id="video" class="feed is-main"></div>
+
+        <div id="video-hc33" class="feed is-pip" hidden
+             title="Click to swap with the main view">
+          <img id="hc33-img" alt="HC33 forward camera">
+          <span class="feed-label">HC33</span>
         </div>
-        <div class="compass-arrow"></div>
-        <div class="compass-readout" id="compass-readout">—</div>
+
+        <!-- Heading-up compass, overlaid on the video while the camera is live.
+             The arrow is fixed pointing up (= the camera's forward view); the ring
+             (with N/E/S/W) rotates so N shows where geographic north is. -->
+        <div id="compass" class="compass" hidden aria-hidden="true">
+          <div class="compass-ring" id="compass-ring">
+            <span class="cardinal cardinal-n">N</span>
+            <span class="cardinal cardinal-e">E</span>
+            <span class="cardinal cardinal-s">S</span>
+            <span class="cardinal cardinal-w">W</span>
+          </div>
+          <div class="compass-arrow"></div>
+          <div class="compass-readout" id="compass-readout">—</div>
+        </div>
       </div>
+
       <div class="camera-controls">
         <button id="cam-start">Start Camera</button>
         <button id="cam-stop" disabled>Stop Camera</button>
+        <button id="hc33-toggle" hidden>HC33 Cam On</button>
+        <button id="cam-swap" hidden title="Swap main and picture-in-picture">⇄ Swap</button>
         <span id="telemetry">
           <span id="mower-status" title="Mower state"></span>
           <span id="battery" title="Mower battery"></span>

@@ -64,7 +64,10 @@ main {
 
 #video-section { display: flex; flex-direction: column; gap: 0.5rem; position: relative; }
 
-#video {
+/* Stage holding both camera feeds.  It owns the 16:9 box that #video used to
+   own, so the layout is unchanged when only the Luba feed is present. */
+#video-stage {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
@@ -72,9 +75,73 @@ main {
   overflow: hidden;
 }
 
+/* A feed is positioned entirely by .is-main / .is-pip.  Swapping the two is a
+   class toggle, which is why it's instant: no element is moved in the DOM, no
+   stream is restarted, the <img> keeps its open MJPEG connection. */
+.feed {
+  position: absolute;
+  background: #000;
+  overflow: hidden;
+  transition: inset 0.18s ease, width 0.18s ease;
+}
+
+.feed.is-main { inset: 0; z-index: 1; }
+
+.feed.is-pip {
+  width: 30%;
+  aspect-ratio: 4 / 3;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.feed.is-pip:hover { border-color: #9cf; }
+.feed[hidden] { display: none; }
+
+#video { min-width: 0; min-height: 0; }
+/* HC33 camera is physically mounted 90° clockwise in the enclosure.
+   Rotate only the video image back 90° counter-clockwise.  The feed container
+   keeps clipping overflow, so the rotated image fills the horizontal panel
+   without black bars. */
+#hc33-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform-origin: center center;
+  transform: translate(-50%, -50%) rotate(-90deg) scale(1.78);
+}
+
+/* Corner tag so it's never ambiguous which feed you're looking at — it stops
+   mattering once you know the view, but matters a lot the first time the
+   HC33's forward view and the Luba's gimbal view look similar. */
+.feed-label {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 15px;
+  color: #cde;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.feed.is-main .feed-label { font-size: 12px; line-height: 18px; }
+
 /* Heading-up compass overlaid on the top-right of the video feed. */
 .compass {
   position: absolute;
+  /* Above both feeds (.is-main z-index 1, .is-pip 2) so it stays readable
+     whichever one is on top.  Top-right corner, while the PiP sits
+     bottom-right, so the two never overlap. */
+  z-index: 3;
   top: 10px;
   right: 10px;
   width: 84px;
@@ -195,3 +262,12 @@ button.danger:hover { background: #8a2828; }
   overflow-y: auto;
   white-space: pre-wrap;
 }
+
+/* HC33 full-frame portrait override */
+#video-hc33{display:flex;align-items:center;justify-content:center}
+#video-hc33 #hc33-img{width:auto;height:75%;max-width:none;object-fit:contain;transform:rotate(-90deg);transform-origin:center center}
+
+/* HC33 portrait centered FINAL */
+#video-hc33.is-main #hc33-img,#video-hc33.is-pip #hc33-img{position:absolute;left:50%;top:50%;width:auto;height:75%;max-width:none;max-height:none;object-fit:contain;transform:translate(-50%,-50%) rotate(-90deg);transform-origin:center center}
+
+#video-hc33[hidden]{display:none}

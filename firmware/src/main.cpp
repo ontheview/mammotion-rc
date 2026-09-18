@@ -31,6 +31,11 @@
 #include "halow_tx_nonblock.h"
 #endif
 #include "cpu_stats.h"
+#ifdef ENABLE_CAMERA
+// OV3660 + MJPEG server.  Defined only on env:hc33-standard-wifi; the header
+// is inert otherwise, so the HaLow build is untouched.
+#include "camera_stream.h"
+#endif
 
 static const char* TAG = "main";
 
@@ -412,6 +417,18 @@ void setup() {
     // the latest BLE scan.  g_ble is a file-global, no capture needed.
     discovery_begin(TCP_PORT, [] { return g_ble.get_bonded_name(); });
 
+#ifdef ENABLE_CAMERA
+    // Camera last: it needs an IP (net_connect above), and it is the one
+    // subsystem the proxy can fully do without.  A failure here is logged and
+    // ignored — BLE control must survive a dead sensor.
+    //
+    // Starts two esp_http_server instances on their own tasks (core 0, low
+    // priority), so nothing below and nothing in loop() ever blocks on video.
+    if (!camera_stream_begin()) {
+        ESP_LOGE(TAG, "camera init failed — continuing without video");
+    }
+#endif
+
 #ifndef USE_STANDARD_WIFI
     // Kick off the lwIP TCPIP-thread heartbeat (see definition above).
     // tcpip_callback() posts the bootstrap to run on the tcpip thread, which
@@ -595,6 +612,12 @@ void loop() {
             s_task_dump_done = true;
         }
     }
+
+#ifdef ENABLE_CAMERA
+    // Reads counters and prints at most one line per second.  No capture, no
+    // socket work, no locks — the streaming itself runs in the httpd tasks.
+    camera_stream_log_metrics();
+#endif
 
     delay(1);   // yield to FreeRTOS so NimBLE and WiFi tasks get CPU
 }

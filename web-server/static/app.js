@@ -16,6 +16,11 @@ const els = {
   mowerStatus: document.getElementById("mower-status"),
   mowerError:  document.getElementById("mower-error"),
   video:    document.getElementById("video"),
+  videoStage: document.getElementById("video-stage"),
+  videoHc33:  document.getElementById("video-hc33"),
+  hc33Img:    document.getElementById("hc33-img"),
+  hc33Toggle: document.getElementById("hc33-toggle"),
+  camSwap:    document.getElementById("cam-swap"),
   camStart: document.getElementById("cam-start"),
   camStop:  document.getElementById("cam-stop"),
   compass:        document.getElementById("compass"),
@@ -168,6 +173,7 @@ async function selectMower(name) {
   lightOn = false;          // unknown on a fresh mower — assume off
   setLightLabel();
   await stopCamera({ silent: true });   // if a previous mower's camera was up
+  stopHc33Camera({ silent: true });     // and its HC33 feed
 
   const meta = mowersList.find(m => m.name === name);
   const cameraAvailable = meta && meta.camera;
@@ -176,6 +182,12 @@ async function selectMower(name) {
   if (!cameraAvailable) {
     log(`(${nick(name)}: no iot_id configured → camera disabled)`);
   }
+
+  // The HC33 camera is discovered, not configured: probe /status and only
+  // offer the button if this mower's HC33 actually answers.  A board running
+  // pre-camera firmware just refuses the connection and the UI stays as it
+  // was — no error, no empty panel.
+  probeHc33Camera(name);
 
   // Idempotent — also recovers any mower the lifespan failed to reach at boot.
   await reconnectMower(name, { silent: true });
@@ -477,5 +489,104 @@ async function stopCamera({ silent } = {}) {
 els.camStart.onclick = startCamera;
 els.camStop.onclick  = () => stopCamera({});
 
+// ── HC33 on-board camera (OV3660 MJPEG) ─────────────────────────────────────
+//
+// Second, independent video source.  The Luba feed is Agora/WebRTC through
+// Mammotion's cloud; this one is an <img> pointed at an MJPEG stream relayed
+// by our own server (/api/hc33cam/...).  It is proxied rather than fetched
+// straight from the HC33 because this page is served over HTTPS and a plain
+// http:// image would be blocked as mixed content.
+//
+// The two feeds never interact: starting, stopping or swapping one has no
+// effect on the other, so losing the cloud feed still leaves a driving view.
+
+let hc33On = false;
+let hc33Available = false;
+let mainFeed = "luba";        // which feed currently occupies .is-main
+
+// 1x1 transparent GIF.  Assigning this (rather than "") is what actually makes
+// the browser drop the open MJPEG connection; an empty src leaves it dangling
+// in some browsers and the firmware then refuses the next viewer, because it
+// accepts only one stream client at a time.
+const BLANK_GIF = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+async function probeHc33Camera(name) {
+  hc33Available = false;
+  els.hc33Toggle.hidden = true;
+  try {
+    const r = await fetch(`/api/hc33cam/${encodeURIComponent(name)}/status`);
+    if (!r.ok) return;
+    const s = await r.json();
+    hc33Available = !!s.available;
+    if (hc33Available) {
+      els.hc33Toggle.hidden = false;
+      log(`HC33 camera available at ${s.host} (fps=${s.fps === undefined ? "—" : s.fps})`);
+    }
+  } catch (_) {
+    // Offline HC33 or old firmware — stay quiet, the feature just isn't offered.
+  }
+}
+
+function setHc33Label() {
+  els.hc33Toggle.textContent = hc33On ? "HC33 Cam Off" : "HC33 Cam On";
+}
+
+function startHc33Camera() {
+  if (!currentMower || hc33On) return;
+  // Cache-buster: without it a browser can reuse a dead connection from a
+  // previous session instead of opening a new one.
+  els.hc33Img.src =
+    `/api/hc33cam/${encodeURIComponent(currentMower)}/stream?t=${Date.now()}`;
+  els.videoHc33.hidden = false;
+  els.camSwap.hidden = false;
+  hc33On = true;
+  setHc33Label();
+  log("HC33 camera on");
+}
+
+function stopHc33Camera({ silent } = {}) {
+  if (!hc33On) {
+    els.videoHc33.hidden = true;
+    els.camSwap.hidden = true;
+    return;
+  }
+  els.hc33Img.src = BLANK_GIF;
+  els.videoHc33.hidden = true;
+  els.camSwap.hidden = true;
+  hc33On = false;
+  setHc33Label();
+  // Whichever feed was main, the Luba one takes the slot back once the HC33
+  // panel disappears — otherwise the stage would be left showing nothing.
+  if (mainFeed === "hc33") swapFeeds();
+  if (!silent) log("HC33 camera off");
+}
+
+// Pure class toggle: no stream is restarted, so the swap is immediate.
+function swapFeeds() {
+  const a = els.video, b = els.videoHc33;
+  a.classList.toggle("is-main"); a.classList.toggle("is-pip");
+  b.classList.toggle("is-main"); b.classList.toggle("is-pip");
+  mainFeed = mainFeed === "luba" ? "hc33" : "luba";
+}
+
+els.hc33Toggle.onclick = () => (hc33On ? stopHc33Camera({}) : startHc33Camera());
+els.camSwap.onclick    = swapFeeds;
+// Clicking the small feed promotes it — the fastest gesture while driving.
+els.videoHc33.onclick  = () => { if (mainFeed === "luba") swapFeeds(); };
+els.video.onclick      = () => { if (mainFeed === "hc33") swapFeeds(); };
+
+els.hc33Img.onerror = () => {
+  if (!hc33On) return;   // expected when we blanked it ourselves
+  log("HC33 stream dropped — check the board or press HC33 Cam On again");
+  stopHc33Camera({ silent: true });
+};
+
+// Free the firmware's single stream slot on navigate-away; otherwise the next
+// page load is refused with 503 until the old socket times out.
+window.addEventListener("pagehide", () => {
+  if (hc33On) els.hc33Img.src = BLANK_GIF;
+});
+
 // ── Boot ────────────────────────────────────────────────────────────────────
+setHc33Label();
 loadMowers();

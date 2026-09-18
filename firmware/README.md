@@ -342,8 +342,10 @@ PlatformIO config, not code:
   partition at `0x7EF000`); a 4 MB board won't fit it — use a stock table and
   drop/move the `config` partition if you keep runtime config.
 - Drop the HC33-specific flash/PSRAM flags (`flash_mode=dio`, `boot=qio`,
-  `memory_type=qio_qspi`, no `BOARD_HAS_PSRAM`) — those only dodge the HC33's
-  MSPI quirk. Use your board's defaults, and enable PSRAM if it actually has it.
+  `memory_type=qio_opi` / `qio_qspi`) — those describe the HC33's flash
+  geometry and its **octal** PSRAM. Use your board's defaults, and set
+  `memory_type` to match whatever PSRAM your board actually has (quad parts
+  use `qio_qspi`; boards with no PSRAM should leave `BOARD_HAS_PSRAM` unset).
 - The chip **must have Bluetooth**: ESP32, ESP32-S3, ESP32-C3, ESP32-C6 all work;
   **ESP32-S2 does not** (no BLE).
 - The `NimBLE-Arduino @ ^1.4.3` pin is for arduino-esp32 v2 (the pinned
@@ -370,11 +372,17 @@ on GPIOs that don't clash with the MM6108 (HaLow) pins. So a mower-mounted,
 self-hosted stream (e.g. the `esp32-camera` library + MJPEG) would make the whole
 system independent of any cloud. Two things to reconcile first:
 
-- **PSRAM.** Camera framebuffers need it, but the proxy firmware currently builds
-  with PSRAM **disabled** — the MSPI-quirk workaround in `platformio.ini` (no
-  `BOARD_HAS_PSRAM`, `memory_type=qio_qspi`). Heltec's own camera firmware uses
-  the board's 8&nbsp;MB PSRAM, so a camera build must re-enable it with the correct
-  `memory_type`; reconcile that note before turning the camera on.
+- **PSRAM — resolved.** This used to read "the proxy builds with PSRAM disabled
+  because of an MSPI quirk; reconcile before turning the camera on". That has
+  now been reconciled: the quirk was a **misdiagnosis**. The HC33's PSRAM is
+  **octal**, and the build was configuring it as **quad** (`qio_qspi` →
+  `CONFIG_SPIRAM_MODE_QUAD`), which fails in a way that looked like a bus
+  fault. With `memory_type=qio_opi` + `-DBOARD_HAS_PSRAM` the full 8&nbsp;MB
+  enumerates and passes a write/read-back verify on real hardware — see
+  `firmware/psram-test/` for the probe and the numbers.
+  **Neither env has been switched over yet.** Camera bring-up is happening in
+  the standalone `firmware/camera-test/` first; `env:hc33-standard-wifi` gets
+  `qio_opi` once that passes on hardware, and `env:hc33` (HaLow) later still.
 - **Bandwidth.** On the HaLow long-range build the stream shares the ~10–12&nbsp;Mbps
   medium with control traffic — the same throughput budget behind the TX-wedge
   work. Keep it low-res / low-fps and test under sustained load. On the
@@ -397,9 +405,13 @@ Most of these are also explained inline in `platformio.ini`:
   globally claims the `espressif32` name, so `hc33-standard-wifi` silently
   builds against arduino-esp32 v3 / IDF 5.x, which NimBLE 1.4.3 can't handle.
   The env pins `espressif32@6.10.0` to prevent this — keep the pin.
-- **MSPI corruption / boot loop on HaLow** → don't define `BOARD_HAS_PSRAM`.
-  The HC33 has no accessible PSRAM; `psramInit()` would probe and corrupt the
-  bus. The `qio_qspi` memory type keeps `psramInit()` a no-op stub.
+- **MSPI corruption / boot loop with PSRAM enabled** → you have the wrong
+  `memory_type`. The HC33's PSRAM is **octal**: it needs
+  `board_build.arduino.memory_type = qio_opi`. Enabling `BOARD_HAS_PSRAM`
+  while on `qio_qspi` (quad) probes an octal part in quad mode and wedges the
+  MSPI bus — that failure is what earlier versions of this README wrongly
+  recorded as "the HC33 has no accessible PSRAM". It has 8&nbsp;MB and it
+  works; see `firmware/psram-test/` for the hardware proof.
 - **HaLow C++ compile errors** (`C99 designator outside aggregate initializer`)
   → the `env:hc33` build forces `-std=gnu++2a` + `-fpermissive` for
   `mmwlan_regdb.h`. The `build_unflags` strips every other `-std=` first.

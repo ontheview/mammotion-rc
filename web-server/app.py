@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import socket
 import sys
@@ -333,7 +334,13 @@ import secrets as _secrets
 from urllib.parse import parse_qs
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import (
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 
 _WEB_USER, _WEB_PASS = persist.load_web_auth()
 _AUTH_COOKIE = "luba_auth"
@@ -927,6 +934,222 @@ async def camera_refresh(name: str):
     cmd = h.commands.refresh_fpv()
     await h.send_raw(cmd)
     return {"ok": True}
+
+
+# ── HC33 on-board camera (OV3660 MJPEG) ──────────────────────────────────────
+#
+# Second video source, independent of the Luba's own Agora/WebRTC feed:
+#   Luba gimbal camera -> Mammotion cloud (Agora, H.265) -> browser
+#   HC33 OV3660        -> MJPEG over HTTP on the HC33   -> THIS PROXY -> browser
+#
+# WHY THIS IS PROXIED INSTEAD OF HIT DIRECTLY
+# -------------------------------------------
+# The UI is served over HTTPS (install.py generates cert.pem/key.pem and the
+# launcher passes --ssl-keyfile/--ssl-certfile).  An <img src="http://<hc33>:81/
+# stream"> from an HTTPS page is mixed content and every current browser blocks
+# it outright.  Relaying through this origin is what makes the stream loadable
+# at all; it also means the HC33's camera ports never need to be reachable from
+# anywhere but the server.
+#
+# WHY IT DOESN'T STARVE CONTROL
+# -----------------------------
+# Everything here is asyncio socket I/O with no blocking calls, so the event
+# loop keeps servicing the joystick WebSocket, telemetry polls and BLE/TCP
+# proxy traffic between frames.  At 640x480 / ~20 KB a frame the relay moves a
+# few hundred KB/s, which is noise next to the loop's capacity.  The firmware
+# side is what actually protects the control path: the MJPEG servers run in
+# their own FreeRTOS tasks on core 0, while the BLE/TCP proxy owns core 1.
+
+# Ports the HC33 camera firmware listens on (see firmware/src/camera_stream.h).
+# Overridable per mower in mowers.toml via hc33_cam_port / hc33_snap_port for
+# boards with something else already bound to 80/81.
+_HC33_STREAM_PORT_DEFAULT = 81
+_HC33_SNAP_PORT_DEFAULT   = 80
+
+# Upstream is on the LAN and the firmware answers immediately or not at all.
+_HC33_CAM_CONNECT_TIMEOUT = 3.0
+_HC33_CAM_HEADER_TIMEOUT  = 5.0
+
+
+def _hc33_cam_hostports(name: str) -> tuple[str, int, int]:
+    cfg = _cfg(name)
+    host = cfg.get("hc33_host")
+    if not host:
+        raise HTTPException(400, f"Mower {name!r} has no hc33_host in mowers.toml.")
+    return (
+        host,
+        int(cfg.get("hc33_cam_port", _HC33_STREAM_PORT_DEFAULT)),
+        int(cfg.get("hc33_snap_port", _HC33_SNAP_PORT_DEFAULT)),
+    )
+
+
+async def _hc33_cam_open(host: str, port: int, path: str):
+    """Open an HTTP/1.1 GET to the HC33 and consume the response headers.
+
+    Returns (reader, writer, status, headers-dict-lowercased).  Raw asyncio
+    rather than httpx/aiohttp deliberately: this is a byte relay, and
+    requirements.txt is kept deliberately thin (see its netifaces note).
+    """
+    reader, writer = await asyncio.wait_for(
+        asyncio.open_connection(host, port), _HC33_CAM_CONNECT_TIMEOUT
+    )
+    req = (
+        f"GET {path} HTTP/1.1\r\n"
+        f"Host: {host}:{port}\r\n"
+        "Accept: */*\r\n"
+        "Connection: close\r\n\r\n"
+    )
+    writer.write(req.encode())
+    await writer.drain()
+
+    raw = await asyncio.wait_for(
+        reader.readuntil(b"\r\n\r\n"), _HC33_CAM_HEADER_TIMEOUT
+    )
+    head = raw.decode("latin-1").split("\r\n")
+    status = int(head[0].split(" ")[1])
+    headers = {}
+    for line in head[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            headers[k.strip().lower()] = v.strip()
+    return reader, writer, status, headers
+
+
+async def _hc33_cam_body(reader, headers):
+    """Yield the response body, undoing chunked transfer-encoding if present.
+
+    esp_http_server emits the MJPEG stream with httpd_resp_send_chunk(), which
+    means HTTP chunked framing.  Passing those size prefixes through verbatim
+    would corrupt the multipart stream the browser then tries to parse, so the
+    chunk layer has to be stripped here.
+    """
+    if headers.get("transfer-encoding", "").lower() == "chunked":
+        while True:
+            line = await reader.readline()
+            if not line:
+                return
+            size_field = line.strip().split(b";")[0]
+            if not size_field:
+                continue
+            try:
+                size = int(size_field, 16)
+            except ValueError:
+                return
+            if size == 0:
+                return
+            remaining = size
+            while remaining > 0:
+                data = await reader.read(min(remaining, 65536))
+                if not data:
+                    return
+                remaining -= len(data)
+                yield data
+            await reader.readexactly(2)   # trailing CRLF after each chunk
+    else:
+        remaining = int(headers.get("content-length", 0)) or None
+        while True:
+            data = await reader.read(65536)
+            if not data:
+                return
+            yield data
+            if remaining is not None:
+                remaining -= len(data)
+                if remaining <= 0:
+                    return
+
+
+@app.get("/api/hc33cam/{name}/stream")
+async def hc33_cam_stream(name: str):
+    """Relay the HC33's MJPEG stream onto this (HTTPS) origin."""
+    host, stream_port, _ = _hc33_cam_hostports(name)
+    try:
+        reader, writer, status, headers = await _hc33_cam_open(
+            host, stream_port, "/stream"
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(504, f"HC33 camera at {host}:{stream_port} did not respond")
+    except OSError as exc:
+        raise HTTPException(502, f"HC33 camera at {host}:{stream_port} unreachable: {exc}")
+
+    if status != 200:
+        writer.close()
+        # 503 is what the firmware returns when a stream client is already
+        # attached — surface it as-is so the UI can say something useful.
+        raise HTTPException(status, f"HC33 camera returned HTTP {status}")
+
+    ctype = headers.get("content-type", "multipart/x-mixed-replace;boundary=hc33frame")
+
+    async def relay():
+        try:
+            async for chunk in _hc33_cam_body(reader, headers):
+                yield chunk
+        finally:
+            # Runs when the browser navigates away or the tab closes; without
+            # it the HC33 would keep its single stream slot occupied and refuse
+            # the next viewer.
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
+
+    return StreamingResponse(
+        relay(),
+        media_type=ctype,
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/hc33cam/{name}/jpg")
+async def hc33_cam_jpg(name: str):
+    """Single JPEG from the HC33 — diagnostics, and the <img> poster frame."""
+    host, _, snap_port = _hc33_cam_hostports(name)
+    try:
+        reader, writer, status, headers = await _hc33_cam_open(host, snap_port, "/jpg")
+    except asyncio.TimeoutError:
+        raise HTTPException(504, f"HC33 camera at {host}:{snap_port} did not respond")
+    except OSError as exc:
+        raise HTTPException(502, f"HC33 camera at {host}:{snap_port} unreachable: {exc}")
+
+    try:
+        if status != 200:
+            raise HTTPException(status, f"HC33 camera returned HTTP {status}")
+        body = b"".join([chunk async for chunk in _hc33_cam_body(reader, headers)])
+    finally:
+        writer.close()
+        with contextlib.suppress(Exception):
+            await writer.wait_closed()
+
+    return Response(body, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/hc33cam/{name}/status")
+async def hc33_cam_status(name: str):
+    """Firmware metrics (fps, frame size, PSRAM/heap, clients, errors).
+
+    Also the availability probe: the UI calls this once on mower select and
+    only shows the HC33 panel if it answers.  A mower whose HC33 predates the
+    camera firmware simply gets a connection refused here.
+    """
+    host, _, snap_port = _hc33_cam_hostports(name)
+    try:
+        reader, writer, status, headers = await _hc33_cam_open(host, snap_port, "/status")
+    except (asyncio.TimeoutError, OSError):
+        return {"available": False, "host": host}
+
+    try:
+        if status != 200:
+            return {"available": False, "host": host}
+        body = b"".join([chunk async for chunk in _hc33_cam_body(reader, headers)])
+    finally:
+        writer.close()
+        with contextlib.suppress(Exception):
+            await writer.wait_closed()
+
+    try:
+        metrics = json.loads(body.decode("utf-8"))
+    except Exception:
+        return {"available": False, "host": host}
+    return {"available": True, "host": host, **metrics}
 
 
 # ── Onboarding / settings ─────────────────────────────────────────────────────

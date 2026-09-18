@@ -1,0 +1,16 @@
+name: "Mammotion Remote"
+description: "Home Assistant add-on for mammotion-rc with HC33 camera support"
+version: "1.0.0"
+slug: "mammotion_remote"
+url: "https://github.com/ontheview/mammotion-rc"
+startup: application
+boot: auto
+init: false
+
+arch:
+  - amd64
+
+host_network: true
+
+watchdog: "tcp://[HOST]:8443"
+
